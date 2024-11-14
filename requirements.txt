@@ -1,0 +1,10 @@
+tweepy
+python-dotenv
+lancedb
+pandas
+numpy
+openai
+sentence-transformers
+requests
+flask
+langchain
