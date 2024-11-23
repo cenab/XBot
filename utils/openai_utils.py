@@ -2,12 +2,13 @@
 
 import openai
 import logging
+from typing import Dict, Any
 from utils.config import Config
 
 logger = logging.getLogger(__name__)
 
 class OpenAILLM:
-    def __init__(self, model='gpt-4', llm_settings=None, character_profile=None):
+    def __init__(self, model: str = 'gpt-4', llm_settings: Optional[Dict[str, Any]] = None, character_profile: Optional[Dict[str, Any]] = None):
         """
         Initialize the OpenAI LLM.
 
@@ -23,7 +24,7 @@ class OpenAILLM:
         self.character_profile = character_profile or {}
         logger.info(f"Initialized OpenAI LLM with model: {self.model}")
 
-    def generate_system_prompt(self):
+    def generate_system_prompt(self) -> str:
         """
         Generate a comprehensive system prompt based on the character profile.
 
@@ -109,7 +110,7 @@ class OpenAILLM:
 
         return system_prompt
 
-    def generate_response(self, user_query):
+    def generate_response(self, user_query: str) -> str:
         """
         Generate a response from the OpenAI LLM.
 

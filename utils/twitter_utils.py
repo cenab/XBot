@@ -2,6 +2,7 @@
 
 import tweepy
 import logging
+from typing import Optional
 from utils.config import Config
 import time
 
@@ -22,14 +23,14 @@ class TwitterAPI:
                 self.access_token,
                 self.access_token_secret
             )
-            self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
+            self.api = tweepy.API(auth, wait_on_rate_limit=True)
             self.api.verify_credentials()
             logger.info("Authenticated with Twitter API.")
         except Exception as e:
             logger.error(f"Failed to authenticate with Twitter API: {e}")
             raise
 
-    def post_tweet(self, message):
+    def post_tweet(self, message: str) -> None:
         """
         Post a tweet with the given message.
 
@@ -38,13 +39,16 @@ class TwitterAPI:
         try:
             self.api.update_status(status=message)
             logger.info("Tweet posted successfully.")
+        except tweepy.RateLimitError:
+            logger.warning("Rate limit reached. Sleeping for 15 minutes.")
+            time.sleep(15 * 60)
+            self.post_tweet(message)  # Retry after sleeping
         except tweepy.TweepError as e:
             logger.error(f"Failed to post tweet: {e}")
-            # Implement retry logic or other error handling as needed
         except Exception as e:
             logger.error(f"An unexpected error occurred while posting tweet: {e}")
 
-    def send_direct_message(self, user_id, message):
+    def send_direct_message(self, user_id: int, message: str) -> None:
         """
         Send a direct message to a user.
 
@@ -54,13 +58,16 @@ class TwitterAPI:
         try:
             self.api.send_direct_message(recipient_id=user_id, text=message)
             logger.info(f"Direct message sent to user ID {user_id}.")
+        except tweepy.RateLimitError:
+            logger.warning("Rate limit reached while sending DM. Sleeping for 15 minutes.")
+            time.sleep(15 * 60)
+            self.send_direct_message(user_id, message)  # Retry after sleeping
         except tweepy.TweepError as e:
             logger.error(f"Failed to send direct message: {e}")
-            # Implement retry logic or other error handling as needed
         except Exception as e:
             logger.error(f"An unexpected error occurred while sending DM: {e}")
 
-    def get_user_id(self, screen_name):
+    def get_user_id(self, screen_name: str) -> Optional[int]:
         """
         Retrieve the user ID for a given Twitter screen name.
 

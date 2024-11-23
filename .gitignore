@@ -1,21 +1,22 @@
-# Environment
-.env
-.venv/
-env/
-venv/
-
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
+
+# Environment variables
+.env
+
+# Database files
+my_lancedb/
 
 # Logs
 *.log
 
-# Database
-my_lancedb/
+# VS Code
+.vscode/
 
-# OS
+# PyCharm
+.idea/
+
+# macOS
 .DS_Store
-Thumbs.db

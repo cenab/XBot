@@ -2,11 +2,12 @@
 
 import logging
 import json
+from typing import Optional, List
 from utils.config import Config
 from utils.lance_db_utils import LanceDBUtils, LocalEmbeddings
+from utils.memory import Memory
 from utils.openai_utils import OpenAILLM
 from utils.twitter_utils import TwitterAPI
-from utils.memory import Memory
 from langchain.document_loaders import UnstructuredURLLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from threading import Lock
@@ -28,37 +29,43 @@ class XBot:
                     cls._instance = super(XBot, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, character_config_path=None):
+    def __init__(self, config_path: str = 'config/xbot_character.json', table_name: str = 'xbot_data'):
         """
         Initialize the XBot with all necessary utilities and character configuration.
         """
         if hasattr(self, '_initialized') and self._initialized:
             return  # Avoid re-initialization in singleton
 
-        self.config = Config()
-        self.character_config_path = character_config_path or self.config.character_config_path
-        self.load_character_config(self.character_config_path)
-        self.db_utils = LanceDBUtils(db_path=self.config.db_path)
-        self.embedding_fn = LocalEmbeddings(model_name=self.config.embedding_model)
-        self.memory = Memory(db_utils=self.db_utils, embedding_fn=self.embedding_fn)
-        self.memory.set_character_name(self.character.get('name', 'Alexandra'))
-        self.openai_llm = OpenAILLM(
-            model=self.config.llm_model,
-            llm_settings=self.character.get('llm_settings', {}),
-            character_profile=self.character
-        )
-        self.twitter = TwitterAPI()
-        self.interaction_policies = self.character.get('interaction_policies', {})
-        self.rate_limit = self.interaction_policies.get('rate_limit_per_minute', 60)
-        self.error_handling_strategy = self.interaction_policies.get('error_handling_strategy', 'retry_with_exponential_backoff')
-        self.logging_level = self.interaction_policies.get('logging_level', 'INFO')
-        self.last_tweet_time = 0
-        self.tweet_interval = 60 / self.rate_limit if self.rate_limit > 0 else 0
+        try:
+            self.config = Config()
+            self.character_config_path = config_path
+            self.table_name = table_name
+            self.load_character_config(self.character_config_path)
 
-        self._initialized = True
-        logger.info("XBot initialized successfully.")
+            self.db_utils = LanceDBUtils(db_path=self.config.db_path)
+            self.embedding_fn = LocalEmbeddings(model_name=self.config.embedding_model)
+            self.memory = Memory(db_utils=self.db_utils, embedding_fn=self.embedding_fn, table_name='conversation_memory')
+            self.memory.set_character_name(self.character.get('name', 'Alexandra'))
+            self.openai_llm = OpenAILLM(
+                model=self.config.llm_model,
+                llm_settings=self.character.get('llm_settings', {}),
+                character_profile=self.character
+            )
+            self.twitter = TwitterAPI()
+            self.interaction_policies = self.character.get('interaction_policies', {})
+            self.rate_limit = self.interaction_policies.get('rate_limit_per_minute', 60)
+            self.error_handling_strategy = self.interaction_policies.get('error_handling_strategy', 'retry_with_exponential_backoff')
+            self.logging_level = self.interaction_policies.get('logging_level', 'INFO')
+            self.last_tweet_time = 0
+            self.tweet_interval = 60 / self.rate_limit if self.rate_limit > 0 else 0
 
-    def load_character_config(self, character_config_path):
+            self._initialized = True
+            logger.info("XBot initialized successfully.")
+        except Exception as e:
+            logger.error(f"Failed to initialize XBot: {e}")
+            raise
+
+    def load_character_config(self, character_config_path: str) -> None:
         """
         Load the character configuration from a JSON file.
 
@@ -72,45 +79,44 @@ class XBot:
             logger.error(f"Failed to load character configuration: {e}")
             self.character = {}
 
-    def ingest_data(self):
+    def ingest_data(self) -> None:
         """
         Ingest data from URLs specified in the character configuration into LanceDB.
         """
-        urls = self.character.get('ingestion_urls', [])
-        if not urls:
-            logger.warning("No ingestion URLs found in character configuration.")
-            return
-
-        logger.info("Ingesting data...")
-        self.db_utils.create_table('xbot_data')
         try:
-            self.db_utils.table.delete()  # Clear existing data
-            logger.debug("Cleared existing data in the table.")
+            urls = self.character.get('ingestion_urls', [])
+            if not urls:
+                logger.warning("No ingestion URLs found in character configuration.")
+                return
+
+            logger.info("Ingesting data...")
+            self.db_utils.create_table(self.table_name)
+            self.db_utils.clear_table(self.table_name)
+
+            # Load and process data
+            loader = UnstructuredURLLoader(urls=urls)
+            documents = loader.load()
+            logger.debug(f"Loaded {len(documents)} documents from URLs.")
+
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+            docs = text_splitter.split_documents(documents)
+            logger.debug(f"Split documents into {len(docs)} chunks.")
+
+            data = [
+                {
+                    'id': idx,
+                    'text': doc.page_content,
+                    'source': doc.metadata.get('source', 'unknown')
+                }
+                for idx, doc in enumerate(docs)
+            ]
+
+            self.db_utils.add_data(data, embedding_fn=self.embedding_fn)
+            logger.info("Data ingestion completed.")
         except Exception as e:
-            logger.warning(f"Could not clear table data: {e}")
+            logger.error(f"Error during data ingestion: {e}")
 
-        # Load and process data
-        loader = UnstructuredURLLoader(urls=urls)
-        documents = loader.load()
-        logger.debug(f"Loaded {len(documents)} documents from URLs.")
-
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-        docs = text_splitter.split_documents(documents)
-        logger.debug(f"Split documents into {len(docs)} chunks.")
-
-        data = [
-            {
-                'id': idx,
-                'text': doc.page_content,
-                'source': doc.metadata.get('source', 'unknown')
-            }
-            for idx, doc in enumerate(docs)
-        ]
-
-        self.db_utils.add_data(data, embedding_fn=self.embedding_fn)
-        logger.info("Data ingestion completed.")
-
-    def generate_prompt(self, user_query):
+    def generate_prompt(self, user_query: str) -> str:
         """
         Generate a prompt based on user query, conversation history, and character configuration.
 
@@ -120,10 +126,10 @@ class XBot:
         context = self.get_context_for_query(user_query)
         conversation_history = self.memory.get_recent_interactions(top_k=5)
         system_prompt = self.openai_llm.generate_system_prompt()
-        full_prompt = f"{conversation_history}{context}\n\nUser's question: {user_query}\n{self.character.get('name', 'Alexandra')}'s answer:"
+        full_prompt = f"{system_prompt}\n\n{conversation_history}\n\nUser's question: {user_query}\n{self.character.get('name', 'Alexandra')}'s answer:"
         return full_prompt
 
-    def get_context_for_query(self, user_query):
+    def get_context_for_query(self, user_query: str) -> str:
         """
         Retrieve relevant context from the database based on the user query.
 
@@ -142,7 +148,7 @@ class XBot:
 
         return '\n'.join(relevant_texts)
 
-    def process_query(self, user_query, recipient_screen_name=None):
+    def process_query(self, user_query: str, recipient_screen_name: Optional[str] = None) -> str:
         """
         Process a user query, generate a response, and post it as a tweet or send as a DM.
 
@@ -150,41 +156,45 @@ class XBot:
         :param recipient_screen_name: Optional Twitter handle to send a DM.
         :return: The generated response.
         """
-        logger.info(f"Processing query: {user_query}")
-        prompt = self.generate_prompt(user_query)
+        try:
+            logger.info(f"Processing query: {user_query}")
+            prompt = self.generate_prompt(user_query)
 
-        response = self.openai_llm.generate_response(
-            user_query=prompt
-        )
+            response = self.openai_llm.generate_response(
+                user_query=prompt
+            )
 
-        # Save interaction to memory
-        self.memory.add_interaction(user_query, response)
+            # Save interaction to memory
+            self.memory.add_interaction(user_query, response)
 
-        # Rate limiting
-        current_time = time.time()
-        if self.tweet_interval > 0:
-            elapsed = current_time - self.last_tweet_time
-            if elapsed < self.tweet_interval:
-                sleep_time = self.tweet_interval - elapsed
-                logger.debug(f"Rate limit reached. Sleeping for {sleep_time:.2f} seconds.")
-                time.sleep(sleep_time)
+            # Rate limiting
+            current_time = time.time()
+            if self.tweet_interval > 0:
+                elapsed = current_time - self.last_tweet_time
+                if elapsed < self.tweet_interval:
+                    sleep_time = self.tweet_interval - elapsed
+                    logger.debug(f"Rate limit reached. Sleeping for {sleep_time:.2f} seconds.")
+                    time.sleep(sleep_time)
 
-        # Decide whether to post a tweet or send a DM
-        if recipient_screen_name:
-            recipient_id = self.twitter.get_user_id(recipient_screen_name)
-            if recipient_id:
-                self.twitter.send_direct_message(recipient_id, response)
-                logger.info(f"Sent DM to @{recipient_screen_name}: {response}")
-        else:
-            tweets = self.split_text_for_twitter(response)
-            for tweet_part in tweets:
-                self.twitter.post_tweet(tweet_part)
-                logger.info(f"Posted tweet: {tweet_part}")
+            # Decide whether to post a tweet or send a DM
+            if recipient_screen_name:
+                recipient_id = self.twitter.get_user_id(recipient_screen_name)
+                if recipient_id:
+                    self.twitter.send_direct_message(recipient_id, response)
+                    logger.info(f"Sent DM to @{recipient_screen_name}: {response}")
+            else:
+                tweets = self.split_text_for_twitter(response)
+                for tweet_part in tweets:
+                    self.twitter.post_tweet(tweet_part)
+                    logger.info(f"Posted tweet: {tweet_part}")
 
-        self.last_tweet_time = time.time()
-        return response
+            self.last_tweet_time = time.time()
+            return response
+        except Exception as e:
+            logger.error(f"Error processing query: {e}")
+            return "I'm sorry, but I couldn't process your request at the moment."
 
-    def split_text_for_twitter(self, text, character_limit=280):
+    def split_text_for_twitter(self, text: str, character_limit: int = 280) -> List[str]:
         """
         Split text into chunks suitable for tweeting.
 

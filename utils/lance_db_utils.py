@@ -2,12 +2,13 @@
 
 import lancedb
 from sentence_transformers import SentenceTransformer
+from typing import List, Dict, Any, Callable, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
 class LanceDBUtils:
-    def __init__(self, db_path):
+    def __init__(self, db_path: str):
         """
         Initialize the LanceDB connection.
 
@@ -21,7 +22,7 @@ class LanceDBUtils:
             logger.error(f"Failed to connect to LanceDB at {db_path}: {e}")
             raise
 
-    def create_table(self, table_name):
+    def create_table(self, table_name: str) -> Any:
         """
         Create a new table in the database or open it if it already exists.
 
@@ -40,11 +41,24 @@ class LanceDBUtils:
             logger.error(f"Error creating or opening table '{table_name}': {e}")
             raise
 
-    def add_data(self, data, embedding_fn=None):
+    def clear_table(self, table_name: str) -> None:
+        """
+        Clear all data from the specified table.
+
+        :param table_name: Name of the table to clear.
+        """
+        try:
+            table = self.create_table(table_name)
+            table.delete()  # Assuming LanceDB has a delete method to clear table data
+            logger.debug(f"Cleared all data from table '{table_name}'.")
+        except Exception as e:
+            logger.warning(f"Could not clear table '{table_name}' data: {e}")
+
+    def add_data(self, data: List[Dict[str, Any]], embedding_fn: Optional[Callable[[List[str]], List[List[float]]]] = None) -> None:
         """
         Add data to the table.
 
-        :param data: Data to add (list of dicts or Pandas DataFrame).
+        :param data: Data to add (list of dicts).
         :param embedding_fn: Optional embedding function to generate embeddings.
         """
         if not self.table:
@@ -61,7 +75,7 @@ class LanceDBUtils:
             logger.error(f"Failed to add data to table: {e}")
             raise
 
-    def retrieve_relevant_info(self, query_text, embedding_fn, top_k=5):
+    def retrieve_relevant_info(self, query_text: str, embedding_fn: Callable[[List[str]], List[List[float]]], top_k: int = 5) -> List[str]:
         """
         Retrieve relevant information from LanceDB based on a query text.
 
@@ -81,7 +95,7 @@ class LanceDBUtils:
             return []
 
 class LocalEmbeddings:
-    def __init__(self, model_name):
+    def __init__(self, model_name: str):
         """
         Initialize the local embedding model.
 
@@ -94,7 +108,7 @@ class LocalEmbeddings:
             logger.error(f"Failed to load embedding model '{model_name}': {e}")
             raise
 
-    def __call__(self, texts):
+    def __call__(self, texts: List[str]) -> List[List[float]]:
         """
         Generate embeddings for a list of texts.
 

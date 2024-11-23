@@ -3,12 +3,13 @@
 import logging
 from datetime import datetime
 from uuid import uuid4
+from typing import List
 from utils.lance_db_utils import LanceDBUtils, LocalEmbeddings
 
 logger = logging.getLogger(__name__)
 
 class Memory:
-    def __init__(self, db_utils: LanceDBUtils, embedding_fn: LocalEmbeddings, table_name='conversation_memory', max_history=50):
+    def __init__(self, db_utils: LanceDBUtils, embedding_fn: LocalEmbeddings, table_name: str = 'conversation_memory', max_history: int = 50):
         """
         Initialize the Memory system using LanceDB.
 
@@ -19,58 +20,73 @@ class Memory:
         """
         self.db_utils = db_utils
         self.embedding_fn = embedding_fn
-        self.table = self.db_utils.create_table(table_name)
+        self.table_name = table_name
         self.max_history = max_history
+        self.table = self.db_utils.create_table(self.table_name)
 
-    def add_interaction(self, user_query: str, bot_response: str):
+    def set_character_name(self, name: str) -> None:
+        """
+        Set the character's name for personalized interactions.
+
+        :param name: Character's name.
+        """
+        self.character_name = name
+
+    def add_interaction(self, user_query: str, bot_response: str) -> None:
         """
         Add a user query and bot response to the memory.
 
         :param user_query: The user's input.
         :param bot_response: Alexandra's response.
         """
-        interaction = {
-            'id': str(uuid4()),
-            'timestamp': datetime.utcnow().isoformat(),
-            'user_query': user_query,
-            'bot_response': bot_response
-        }
-        # Generate embedding based on the combined interaction
-        combined_text = f"User: {user_query}\nAlexandra: {bot_response}"
-        interaction['embedding'] = self.embedding_fn([combined_text])[0]
+        try:
+            interaction = {
+                'id': str(uuid4()),
+                'timestamp': datetime.utcnow().isoformat(),
+                'user_query': user_query,
+                'bot_response': bot_response
+            }
+            # Generate embedding based on the combined interaction
+            combined_text = f"User: {user_query}\n{self.character_name}: {bot_response}"
+            interaction['embedding'] = self.embedding_fn([combined_text])[0]
 
-        self.db_utils.add_data([interaction], embedding_fn=None)  # Embedding already added
-        logger.debug(f"Added interaction to memory: {interaction['id']}")
+            self.db_utils.add_data([interaction], embedding_fn=None)  # Embedding already added
+            logger.debug(f"Added interaction to memory: {interaction['id']}")
 
-        # Prune memory if exceeding max_history
-        self.prune_memory()
+            # Prune memory if exceeding max_history
+            self.prune_memory()
+        except Exception as e:
+            logger.error(f"Error adding interaction to memory: {e}")
 
-    def prune_memory(self):
+    def prune_memory(self) -> None:
         """
         Ensure the memory does not exceed the maximum history limit.
         """
-        total_interactions = len(self.table.to_df())
-        if total_interactions > self.max_history:
-            # Calculate how many to remove
-            num_to_remove = total_interactions - self.max_history
-            # Retrieve the oldest interactions
-            oldest = self.table.to_df().sort_values(by='timestamp').head(num_to_remove)
-            for idx, row in oldest.iterrows():
-                self.table.delete(row['id'])
-                logger.debug(f"Pruned interaction from memory: {row['id']}")
+        try:
+            df = self.table.to_df()
+            total_interactions = len(df)
+            if total_interactions > self.max_history:
+                num_to_remove = total_interactions - self.max_history
+                # Retrieve the oldest interactions
+                oldest = df.sort_values(by='timestamp').head(num_to_remove)
+                ids_to_remove = oldest['id'].tolist()
+                self.table.delete(ids_to_remove)
+                logger.debug(f"Pruned {num_to_remove} interactions from memory.")
+        except Exception as e:
+            logger.error(f"Error pruning memory: {e}")
 
-    def get_recent_interactions(self, top_k=5):
+    def get_recent_interactions(self, top_k: int = 5) -> str:
         """
         Retrieve the most recent interactions.
 
         :param top_k: Number of recent interactions to retrieve.
-        :return: List of interaction strings.
+        :return: Concatenated string of recent interactions.
         """
         try:
             df = self.table.to_df().sort_values(by='timestamp', ascending=False).head(top_k)
-            interactions = [f"User: {row['user_query']}\nAlexandra: {row['bot_response']}" for _, row in df.iterrows()]
+            interactions = [f"User: {row['user_query']}\n{self.character_name}: {row['bot_response']}" for _, row in df.iterrows()]
             logger.debug(f"Retrieved {len(interactions)} recent interactions from memory.")
-            return interactions[::-1]  # Reverse to maintain chronological order
+            return '\n'.join(interactions[::-1])  # Reverse to maintain chronological order
         except Exception as e:
             logger.error(f"Error retrieving recent interactions: {e}")
-            return []
+            return ""
