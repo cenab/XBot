@@ -1,3 +1,5 @@
+# utils/lance_db_utils.py
+
 import lancedb
 from sentence_transformers import SentenceTransformer
 import logging

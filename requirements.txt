@@ -1,10 +1,6 @@
-# requirements.txt
-
-lancedb
-pandas
-numpy
-sentence-transformers
-openai
-python-dotenv
-langchain
-tweepy
+tweepy>=4.0.0
+openai>=0.27.0
+lancedb>=0.3.0
+sentence-transformers>=2.2.0
+langchain>=0.0.0
+python-dotenv>=0.19.0

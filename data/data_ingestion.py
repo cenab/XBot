@@ -1,27 +1,40 @@
+# data/data_ingestion.py
+
 import logging
+import json
+from utils.config import Config
 from utils.lance_db_utils import LanceDBUtils, LocalEmbeddings
 from langchain.document_loaders import UnstructuredURLLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from dotenv import load_dotenv
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-def ingest_data(urls, db_path='my_lancedb', table_name='my_table', embedding_model='sentence-transformers/all-MiniLM-L6-v2'):
+def ingest_data(character_config_path='config/xbot_character.json'):
     """
-    Ingest data from specified URLs and add to LanceDB.
+    Ingest data from URLs specified in the character configuration and add to LanceDB.
 
-    :param urls: List of URLs to fetch data from.
-    :param db_path: Path to the LanceDB database.
-    :param table_name: Name of the table in LanceDB.
-    :param embedding_model: Model name for generating embeddings.
+    :param character_config_path: Path to the character JSON file containing ingestion URLs.
     """
     logger.info("Starting data ingestion process.")
 
+    # Load character configuration
+    try:
+        with open(character_config_path, 'r') as file:
+            character = json.load(file)
+        logger.info(f"Loaded character configuration from {character_config_path}.")
+    except Exception as e:
+        logger.error(f"Failed to load character configuration: {e}")
+        return
+
+    urls = character.get('ingestion_urls', [])
+    if not urls:
+        logger.warning("No ingestion URLs found in character configuration.")
+        return
+
     # Initialize LanceDB utilities
-    db_utils = LanceDBUtils(db_path=db_path)
-    table = db_utils.create_table(table_name)
+    config = Config()
+    db_utils = LanceDBUtils(db_path=config.db_path)
+    table = db_utils.create_table('my_table')
 
     # Clear existing data in the table (use with caution)
     try:
@@ -31,13 +44,13 @@ def ingest_data(urls, db_path='my_lancedb', table_name='my_table', embedding_mod
         logger.warning(f"Could not clear table data: {e}")
 
     # Initialize the local embedding function
-    embedding_fn = LocalEmbeddings(model_name=embedding_model)
+    embedding_fn = LocalEmbeddings(model_name=config.embedding_model)
 
     # Load documents from URLs
     loader = UnstructuredURLLoader(urls=urls)
     documents = loader.load()
     logger.debug(f"Loaded {len(documents)} documents from URLs.")
-
+    
     # Split documents into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     docs = text_splitter.split_documents(documents)
@@ -59,9 +72,4 @@ def ingest_data(urls, db_path='my_lancedb', table_name='my_table', embedding_mod
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    urls = [
-        "https://en.wikipedia.org/wiki/Artificial_intelligence",
-        "https://en.wikipedia.org/wiki/Machine_learning",
-        # Add more URLs as needed
-    ]
-    ingest_data(urls)
+    ingest_data()

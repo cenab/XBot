@@ -1,3 +1,5 @@
+# utils/config.py
+
 import os
 from dotenv import load_dotenv
 
@@ -22,13 +24,17 @@ class Config:
         self.embedding_model = os.getenv('EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
         self.llm_model = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
 
+        # Character configuration
+        self.character_config_path = os.getenv('CHARACTER_CONFIG_PATH', 'config/xbot_character.json')
+
     def _validate_env_vars(self):
         required_vars = [
             'OPENAI_API_KEY',
             'TWITTER_API_KEY',
             'TWITTER_API_SECRET_KEY',
             'TWITTER_ACCESS_TOKEN',
-            'TWITTER_ACCESS_TOKEN_SECRET'
+            'TWITTER_ACCESS_TOKEN_SECRET',
+            'CHARACTER_CONFIG_PATH'
         ]
 
         missing_vars = [var for var in required_vars if not os.getenv(var)]

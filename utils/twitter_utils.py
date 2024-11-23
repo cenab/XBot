@@ -1,3 +1,5 @@
+# utils/twitter_utils.py
+
 import tweepy
 import logging
 from utils.config import Config
@@ -20,6 +22,7 @@ class TwitterAPI:
                 self.access_token_secret
             )
             self.api = tweepy.API(auth)
+            self.api.verify_credentials()
             logger.info("Authenticated with Twitter API.")
         except Exception as e:
             logger.error(f"Failed to authenticate with Twitter API: {e}")
