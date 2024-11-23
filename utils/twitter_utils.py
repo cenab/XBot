@@ -1,5 +1,3 @@
-# utils/twitter_utils.py
-
 import tweepy
 import logging
 from utils.config import Config
@@ -27,30 +25,14 @@ class TwitterAPI:
             logger.error(f"Failed to authenticate with Twitter API: {e}")
             raise
 
-    def get_user_id(self, screen_name):
+    def post_tweet(self, message):
         """
-        Retrieve the user ID based on the Twitter screen name.
+        Post a tweet with the given message.
 
-        :param screen_name: Twitter user's screen name.
-        :return: User ID as a string.
+        :param message: The content of the tweet.
         """
         try:
-            user = self.api.get_user(screen_name=screen_name)
-            logger.debug(f"Retrieved user ID for {screen_name}: {user.id}")
-            return user.id_str
+            self.api.update_status(status=message)
+            logger.info("Tweet posted successfully.")
         except Exception as e:
-            logger.error(f"Error retrieving user ID for {screen_name}: {e}")
-            return None
-
-    def send_direct_message(self, recipient_id, message):
-        """
-        Send a direct message to a Twitter user.
-
-        :param recipient_id: The recipient's Twitter user ID.
-        :param message: The message content.
-        """
-        try:
-            self.api.send_direct_message(recipient_id, message)
-            logger.info(f"Sent DM to user ID {recipient_id}.")
-        except Exception as e:
-            logger.error(f"Failed to send DM to user ID {recipient_id}: {e}")
+            logger.error(f"Failed to post tweet: {e}")

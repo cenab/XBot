@@ -1,5 +1,3 @@
-# utils/openai_utils.py
-
 import openai
 import logging
 from utils.config import Config

@@ -1,5 +1,3 @@
-# data/data_ingestion.py
-
 import logging
 from utils.lance_db_utils import LanceDBUtils, LocalEmbeddings
 from langchain.document_loaders import UnstructuredURLLoader

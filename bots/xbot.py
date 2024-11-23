@@ -1,10 +1,10 @@
-# bots/xbot.py
-
 import logging
 from utils.config import Config
 from utils.lance_db_utils import LanceDBUtils, LocalEmbeddings
 from utils.openai_utils import OpenAILLM
 from utils.twitter_utils import TwitterAPI
+from langchain.document_loaders import UnstructuredURLLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +34,6 @@ class XBot:
             logger.warning(f"Could not clear table data: {e}")
 
         # Load and process data
-        from langchain.document_loaders import UnstructuredURLLoader
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
-
         loader = UnstructuredURLLoader(urls=urls)
         documents = loader.load()
         logger.debug(f"Loaded {len(documents)} documents from URLs.")
@@ -57,12 +54,11 @@ class XBot:
         self.db_utils.add_data(data, embedding_fn=self.embedding_fn)
         logger.info("Data ingestion completed.")
 
-    def process_query(self, user_query, recipient_screen_name):
+    def process_query(self, user_query):
         """
-        Process a user query, generate a response, and send it via Twitter DM.
+        Process a user query, generate a response, and post it as a tweet.
 
         :param user_query: The user's query string.
-        :param recipient_screen_name: The Twitter handle to send the response to.
         :return: The generated response.
         """
         logger.info(f"Processing query: {user_query}")
@@ -85,11 +81,7 @@ class XBot:
             system_prompt=system_prompt
         )
 
-        recipient_id = self.twitter.get_user_id(recipient_screen_name)
-        if recipient_id:
-            self.twitter.send_direct_message(recipient_id, response)
-            logger.info(f"Response sent to {recipient_screen_name}.")
-        else:
-            logger.error(f"Could not find user ID for {recipient_screen_name}.")
-
+        # Post the response as a tweet
+        self.twitter.post_tweet(response)
+        logger.info("Response posted as a tweet.")
         return response

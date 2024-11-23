@@ -1,5 +1,3 @@
-# main.py
-
 import logging
 from bots.xbot import XBot
 
@@ -32,9 +30,8 @@ def main():
 
     # Example: Process a query
     user_query = "What are the main applications of artificial intelligence?"
-    recipient_screen_name = "recipient_twitter_handle"  # Replace with actual handle
-    response = bot.process_query(user_query, recipient_screen_name)
+    response = bot.process_query(user_query)
     print(f"Response: {response}")
 
 if __name__ == "__main__":
-    main()
+        main()
