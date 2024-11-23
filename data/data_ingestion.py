@@ -34,7 +34,7 @@ def ingest_data(character_config_path='config/xbot_character.json'):
     # Initialize LanceDB utilities
     config = Config()
     db_utils = LanceDBUtils(db_path=config.db_path)
-    table = db_utils.create_table('my_table')
+    table = db_utils.create_table('xbot_data')  # Renamed table for clarity
 
     # Clear existing data in the table (use with caution)
     try:
@@ -50,7 +50,7 @@ def ingest_data(character_config_path='config/xbot_character.json'):
     loader = UnstructuredURLLoader(urls=urls)
     documents = loader.load()
     logger.debug(f"Loaded {len(documents)} documents from URLs.")
-    
+
     # Split documents into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     docs = text_splitter.split_documents(documents)
@@ -71,5 +71,5 @@ def ingest_data(character_config_path='config/xbot_character.json'):
     logger.info("Data ingestion completed.")
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     ingest_data()

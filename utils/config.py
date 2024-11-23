@@ -22,7 +22,7 @@ class Config:
 
         # Model configs
         self.embedding_model = os.getenv('EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
-        self.llm_model = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
+        self.llm_model = os.getenv('LLM_MODEL', 'gpt-4')  # Updated to GPT-4
 
         # Character configuration
         self.character_config_path = os.getenv('CHARACTER_CONFIG_PATH', 'config/xbot_character.json')

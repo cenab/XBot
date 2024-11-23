@@ -13,8 +13,13 @@ class LanceDBUtils:
 
         :param db_path: The directory path where the database is stored.
         """
-        self.db = lancedb.connect(db_path)
-        self.table = None
+        try:
+            self.db = lancedb.connect(db_path)
+            logger.info(f"Connected to LanceDB at {db_path}.")
+            self.table = None
+        except Exception as e:
+            logger.error(f"Failed to connect to LanceDB at {db_path}: {e}")
+            raise
 
     def create_table(self, table_name):
         """
@@ -23,13 +28,17 @@ class LanceDBUtils:
         :param table_name: Name of the table to create or open.
         :return: The table object.
         """
-        if table_name not in self.db.table_names():
-            self.table = self.db.create_table(table_name)
-            logger.info(f"Created new table: {table_name}")
-        else:
-            self.table = self.db.open_table(table_name)
-            logger.info(f"Opened existing table: {table_name}")
-        return self.table
+        try:
+            if table_name not in self.db.table_names():
+                self.table = self.db.create_table(table_name)
+                logger.info(f"Created new table: {table_name}")
+            else:
+                self.table = self.db.open_table(table_name)
+                logger.info(f"Opened existing table: {table_name}")
+            return self.table
+        except Exception as e:
+            logger.error(f"Error creating or opening table '{table_name}': {e}")
+            raise
 
     def add_data(self, data, embedding_fn=None):
         """
@@ -42,11 +51,12 @@ class LanceDBUtils:
             raise ValueError("Table is not initialized. Call create_table() first.")
         try:
             if embedding_fn:
-                self.table.add(data, embedding=embedding_fn)
-                logger.debug("Added data with embeddings.")
-            else:
-                self.table.add(data)
-                logger.debug("Added data without embeddings.")
+                texts = [item['text'] for item in data]
+                embeddings = embedding_fn(texts)
+                for item, embedding in zip(data, embeddings):
+                    item['embedding'] = embedding
+            self.table.insert(data)
+            logger.debug("Added data to table.")
         except Exception as e:
             logger.error(f"Failed to add data to table: {e}")
             raise
@@ -62,9 +72,9 @@ class LanceDBUtils:
         """
         try:
             query_embedding = embedding_fn([query_text])[0]
-            results = self.table.search(query_embedding).limit(top_k).to_df()
+            results = self.table.search(query_embedding, "embedding").limit(top_k).to_df()
             relevant_texts = results['text'].tolist()
-            logger.debug(f"Retrieved {len(relevant_texts)} relevant texts.")
+            logger.debug(f"Retrieved {len(relevant_texts)} relevant texts for query '{query_text}'.")
             return relevant_texts
         except Exception as e:
             logger.error(f"Error retrieving relevant information: {e}")
