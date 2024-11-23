@@ -1,79 +1,56 @@
-# twitter_utils.py
+# utils/twitter_utils.py
 
-import logging
-import sys
 import tweepy
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(name)s - %(message)s',
-    handlers=[
-        logging.FileHandler('twitter_send_message.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+import logging
+from utils.config import Config
 
 logger = logging.getLogger(__name__)
 
-def create_api():
-    """
-    Creates and returns a Tweepy API object after authenticating with Twitter.
-    """
-    # Load credentials from environment variables
-    API_KEY = os.getenv('API_KEY')
-    API_SECRET_KEY = os.getenv('API_SECRET_KEY')
-    ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
-    ACCESS_TOKEN_SECRET = os.getenv('ACCESS_TOKEN_SECRET')
+class TwitterAPI:
+    def __init__(self):
+        config = Config()
+        self.api_key = config.twitter_api_key
+        self.api_secret = config.twitter_api_secret
+        self.access_token = config.twitter_access_token
+        self.access_token_secret = config.twitter_access_token_secret
 
-    try:
-        auth = tweepy.OAuth1UserHandler(
-            API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
-        )
-        api = tweepy.API(auth)
-        logger.debug('Twitter API authentication successful.')
-        return api
-    except tweepy.TweepyException as e:
-        logger.error(f'Authentication failed: {e}')
-        sys.exit(1)
+        try:
+            auth = tweepy.OAuth1UserHandler(
+                self.api_key,
+                self.api_secret,
+                self.access_token,
+                self.access_token_secret
+            )
+            self.api = tweepy.API(auth)
+            logger.info("Authenticated with Twitter API.")
+        except Exception as e:
+            logger.error(f"Failed to authenticate with Twitter API: {e}")
+            raise
 
-def send_direct_message(api, recipient_id, text):
-    """
-    Sends a direct message to the specified user ID.
+    def get_user_id(self, screen_name):
+        """
+        Retrieve the user ID based on the Twitter screen name.
 
-    Parameters:
-    - api: Authenticated Tweepy API object.
-    - recipient_id: The user ID of the recipient.
-    - text: The message text to send.
-    """
-    try:
-        api.send_direct_message(recipient_id=recipient_id, text=text)
-        logger.info(f'Message sent to user ID {recipient_id}.')
-    except tweepy.TweepyException as e:
-        logger.error(f'Failed to send message: {e}')
-        sys.exit(1)
+        :param screen_name: Twitter user's screen name.
+        :return: User ID as a string.
+        """
+        try:
+            user = self.api.get_user(screen_name=screen_name)
+            logger.debug(f"Retrieved user ID for {screen_name}: {user.id}")
+            return user.id_str
+        except Exception as e:
+            logger.error(f"Error retrieving user ID for {screen_name}: {e}")
+            return None
 
-def get_user_id(api, screen_name):
-    """
-    Retrieves the user ID for a given screen name.
+    def send_direct_message(self, recipient_id, message):
+        """
+        Send a direct message to a Twitter user.
 
-    Parameters:
-    - api: Authenticated Tweepy API object.
-    - screen_name: The screen name of the user.
-
-    Returns:
-    - The user ID as a string.
-    """
-    try:
-        user = api.get_user(screen_name=screen_name)
-        user_id = user.id_str
-        logger.debug(f'User ID for {screen_name} is {user_id}.')
-        return user_id
-    except tweepy.TweepyException as e:
-        logger.error(f'Failed to retrieve user ID: {e}')
-        sys.exit(1)
+        :param recipient_id: The recipient's Twitter user ID.
+        :param message: The message content.
+        """
+        try:
+            self.api.send_direct_message(recipient_id, message)
+            logger.info(f"Sent DM to user ID {recipient_id}.")
+        except Exception as e:
+            logger.error(f"Failed to send DM to user ID {recipient_id}: {e}")

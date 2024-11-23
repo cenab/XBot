@@ -1,1 +1,21 @@
+# Environment
 .env
+.venv/
+env/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Logs
+*.log
+
+# Database
+my_lancedb/
+
+# OS
+.DS_Store
+Thumbs.db

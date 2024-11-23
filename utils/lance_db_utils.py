@@ -1,23 +1,19 @@
-# lance_db_utils.py
+# utils/lance_db_utils.py
 
 import lancedb
-import pandas as pd
-import numpy as np
-from lancedb.embeddings import EmbeddingFunction
 from sentence_transformers import SentenceTransformer
-import openai
-from dotenv import load_dotenv
-import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class LanceDBUtils:
-    def __init__(self, db_path='lancedb_data'):
+    def __init__(self, db_path):
         """
         Initialize the LanceDB connection.
 
         :param db_path: The directory path where the database is stored.
         """
-        self.db_path = db_path
-        self.db = lancedb.connect(self.db_path)
+        self.db = lancedb.connect(db_path)
         self.table = None
 
     def create_table(self, table_name):
@@ -29,8 +25,10 @@ class LanceDBUtils:
         """
         if table_name not in self.db.table_names():
             self.table = self.db.create_table(table_name)
+            logger.info(f"Created new table: {table_name}")
         else:
             self.table = self.db.open_table(table_name)
+            logger.info(f"Opened existing table: {table_name}")
         return self.table
 
     def add_data(self, data, embedding_fn=None):
@@ -40,72 +38,51 @@ class LanceDBUtils:
         :param data: Data to add (list of dicts or Pandas DataFrame).
         :param embedding_fn: Optional embedding function to generate embeddings.
         """
-        if self.table is None:
+        if not self.table:
             raise ValueError("Table is not initialized. Call create_table() first.")
-        if embedding_fn:
-            self.table.add(data, embedding=embedding_fn)
-        else:
-            self.table.add(data)
+        try:
+            if embedding_fn:
+                self.table.add(data, embedding=embedding_fn)
+                logger.debug("Added data with embeddings.")
+            else:
+                self.table.add(data)
+                logger.debug("Added data without embeddings.")
+        except Exception as e:
+            logger.error(f"Failed to add data to table: {e}")
+            raise
 
-    def query_data(self, query_filter=None):
-        """
-        Query data from the table.
-
-        :param query_filter: Optional filter string for querying.
-        :return: Pandas DataFrame of the query results.
-        """
-        if self.table is None:
-            raise ValueError("Table is not initialized. Call create_table() first.")
-        df = self.table.to_pandas()
-        if query_filter:
-            df = df.query(query_filter)
-        return df
-
-    def vector_search(self, query_vector, limit=5, query_filter=None):
-        """
-        Perform a vector similarity search.
-
-        :param query_vector: The query vector for similarity search.
-        :param limit: Number of results to return.
-        :param query_filter: Optional filter string to combine with the search.
-        :return: Pandas DataFrame of the search results.
-        """
-        if self.table is None:
-            raise ValueError("Table is not initialized. Call create_table() first.")
-        search = self.table.search(query_vector)
-        if query_filter:
-            search = search.where(query_filter)
-        results = search.limit(limit).to_df()
-        return results
-
-    def retrieve_relevant_info(self, query_text, embedding_fn, top_k=5, query_filter=None):
+    def retrieve_relevant_info(self, query_text, embedding_fn, top_k=5):
         """
         Retrieve relevant information from LanceDB based on a query text.
 
         :param query_text: The user's query text.
         :param embedding_fn: Embedding function to generate the query embedding.
         :param top_k: Number of relevant results to retrieve.
-        :param query_filter: Optional filter string to refine the search.
         :return: List of relevant text snippets.
         """
-        query_embedding = embedding_fn([query_text])[0]
-        results = self.vector_search(
-            query_vector=query_embedding,
-            limit=top_k,
-            query_filter=query_filter
-        )
-        # Assuming the text field is named 'text'
-        relevant_texts = results['text'].tolist()
-        return relevant_texts
+        try:
+            query_embedding = embedding_fn([query_text])[0]
+            results = self.table.search(query_embedding).limit(top_k).to_df()
+            relevant_texts = results['text'].tolist()
+            logger.debug(f"Retrieved {len(relevant_texts)} relevant texts.")
+            return relevant_texts
+        except Exception as e:
+            logger.error(f"Error retrieving relevant information: {e}")
+            return []
 
-class LocalEmbeddings(EmbeddingFunction):
-    def __init__(self, model_name='sentence-transformers/all-MiniLM-L6-v2'):
+class LocalEmbeddings:
+    def __init__(self, model_name):
         """
         Initialize the local embedding model.
 
         :param model_name: Name of the embedding model to use.
         """
-        self.model = SentenceTransformer(model_name)
+        try:
+            self.model = SentenceTransformer(model_name)
+            logger.info(f"Loaded embedding model: {model_name}")
+        except Exception as e:
+            logger.error(f"Failed to load embedding model '{model_name}': {e}")
+            raise
 
     def __call__(self, texts):
         """
@@ -114,42 +91,10 @@ class LocalEmbeddings(EmbeddingFunction):
         :param texts: List of text strings.
         :return: List of embeddings.
         """
-        embeddings = self.model.encode(texts, convert_to_numpy=True).tolist()
-        return embeddings
-
-class OpenAILLM:
-    def __init__(self, model='gpt-3.5-turbo'):
-        """
-        Initialize the OpenAI LLM.
-        
-        :param model: The OpenAI model to use.
-        """
-        load_dotenv()
-        self.api_key = os.getenv('API_KEY')
-        self.model = model
-        openai.api_key = self.api_key
-
-    def generate_response(self, prompt, system_prompt=None, max_tokens=150):
-        """
-        Generate a response from the OpenAI LLM.
-
-        :param prompt: The user prompt to send to the LLM.
-        :param system_prompt: Optional system prompt to set the assistant's behavior.
-        :param max_tokens: Maximum number of tokens in the response.
-        :return: The LLM's response text.
-        """
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        response = openai.ChatCompletion.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens,
-            n=1,
-            stop=None,
-            temperature=0.7,
-        )
-
-        return response['choices'][0]['message']['content']
+        try:
+            embeddings = self.model.encode(texts, convert_to_numpy=True).tolist()
+            logger.debug(f"Generated embeddings for {len(texts)} texts.")
+            return embeddings
+        except Exception as e:
+            logger.error(f"Error generating embeddings: {e}")
+            raise

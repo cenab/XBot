@@ -1,10 +1,10 @@
-tweepy
-python-dotenv
+# requirements.txt
+
 lancedb
 pandas
 numpy
-openai
 sentence-transformers
-requests
-flask
+openai
+python-dotenv
 langchain
+tweepy
