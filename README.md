@@ -1,7 +1,3 @@
-Certainly! Below is the **comprehensive documentation** for your **XBot** project. This guide will walk you through every step, from setting up your development environment to running and maintaining your bot. Whether you're a developer, contributor, or user, this documentation is designed to provide all the information you need to effectively work with XBot.
-
----
-
 # XBot Documentation
 
 ## Table of Contents
