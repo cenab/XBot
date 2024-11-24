@@ -1,1 +1,27 @@
- 
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+env.list
+
+# Database files
+my_lancedb/
+
+# Logs
+*.log
+
+# Git
+.git
+.gitignore
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# macOS
+.DS_Store 

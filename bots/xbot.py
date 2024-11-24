@@ -158,15 +158,23 @@ class XBot:
         """
         try:
             logger.info(f"Processing query: {user_query}")
-            prompt = self.generate_prompt(user_query)
-
-            response = self.openai_llm.generate_response(
-                user_query=prompt
-            )
-
+            
+            # Generate system prompt and messages
+            system_prompt = self.openai_llm.generate_system_prompt()
+            conversation_history = self.memory.get_recent_interactions(top_k=5)
+            
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            if conversation_history:
+                messages.append({"role": "assistant", "content": conversation_history})
+            
+            messages.append({"role": "user", "content": user_query})
+            
+            response = self.openai_llm.generate_response(messages=messages)
+            
             # Save interaction to memory
             self.memory.add_interaction(user_query, response)
-
+            
             # Rate limiting
             current_time = time.time()
             if self.tweet_interval > 0:
